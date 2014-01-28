@@ -35,18 +35,30 @@ public class XLockSecuritySlide implements IXposedHookLoadPackage {
 		final String packageName = lpparam.packageName;
 		final ClassLoader cloader = lpparam.classLoader;
 		final Object inst = this;
+		
+		String keyGuardPackage = "";
 
-		// we need to get into the lockscreen, which belongs to system package "android"
-		if (!packageName.equals("android"))
-			return;
+		XposedBridge.log("loadPackage: "+packageName);
+		// on Kitkat package name has changed, so differ betwenn KK and JB
+		if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.KITKAT) {	// NOT KK -> JB
+			// we need to get into the lockscreen, which belongs to system package "android"
+			if (!packageName.equals("android"))
+				return;
+			else
+				keyGuardPackage = "com.android.internal.policy.impl.keyguard.";
+		} else	// IF KK -> NOT JB
+			if (!packageName.equals("com.android.keyguard"))
+				return;
+			else
+				keyGuardPackage = "com.android.keyguard.";
 		
 		// get enum value for "SecurityMode.None" (static)
-		final Class<?> securityModeEnum = XposedHelpers.findClass("com.android.internal.policy.impl.keyguard.KeyguardSecurityModel$SecurityMode", cloader);
+		final Class<?> securityModeEnum = XposedHelpers.findClass(keyGuardPackage+"KeyguardSecurityModel$SecurityMode", cloader);
 		final Object SecNone = XposedHelpers.getStaticObjectField(securityModeEnum, "None");
 		
 		// showPrimarySecurityScreen --> before: showSecurityScreen(None) --> prevent original (is called anyway..)
 		// calling showSecurityScreen with None means, no security measure is set -> sliding
-		XposedHelpers.findAndHookMethod("com.android.internal.policy.impl.keyguard.KeyguardHostView", cloader, "showPrimarySecurityScreen", "boolean", new XC_MethodHook() {
+		XposedHelpers.findAndHookMethod(keyGuardPackage+"KeyguardHostView", cloader, "showPrimarySecurityScreen", "boolean", new XC_MethodHook() {
 
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param)
@@ -60,7 +72,8 @@ public class XLockSecuritySlide implements IXposedHookLoadPackage {
 			}						
 		});
 		
-		XposedHelpers.findAndHookMethod("com.android.internal.policy.impl.keyguard.KeyguardHostView", cloader, "showSecurityScreen", securityModeEnum, new XC_MethodHook() {
+		/*
+		XposedHelpers.findAndHookMethod(keyGuardPackage+"KeyguardHostView", cloader, "showSecurityScreen", securityModeEnum, new XC_MethodHook() {
 
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param)
@@ -72,7 +85,7 @@ public class XLockSecuritySlide implements IXposedHookLoadPackage {
 			}						
 		});
 		
-		XposedHelpers.findAndHookMethod("com.android.internal.policy.impl.keyguard.KeyguardHostView", cloader, "showNextSecurityScreenIfPresent", new XC_MethodHook() {
+		XposedHelpers.findAndHookMethod(keyGuardPackage+"KeyguardHostView", cloader, "showNextSecurityScreenIfPresent", new XC_MethodHook() {
 
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param)
@@ -82,8 +95,9 @@ public class XLockSecuritySlide implements IXposedHookLoadPackage {
 				return;
 			}						
 		});
+		*/
 		
-		XposedHelpers.findAndHookMethod("com.android.internal.policy.impl.keyguard.KeyguardHostView", cloader, "showNextSecurityScreenOrFinish", boolean.class, new XC_MethodHook() {
+		XposedHelpers.findAndHookMethod(keyGuardPackage+"KeyguardHostView", cloader, "showNextSecurityScreenOrFinish", boolean.class, new XC_MethodHook() {
 
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param)
