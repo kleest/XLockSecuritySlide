@@ -16,13 +16,9 @@
 
 package de.stevolk.xlocksecurityslide;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodHook.Unhook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
@@ -34,11 +30,10 @@ public class XLockSecuritySlide implements IXposedHookLoadPackage {
 	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
 		final String packageName = lpparam.packageName;
 		final ClassLoader cloader = lpparam.classLoader;
-		final Object inst = this;
 		
 		String keyGuardPackage = "";
 
-		XposedBridge.log("loadPackage: "+packageName);
+//		XposedBridge.log("loadPackage: "+packageName);
 		// on Kitkat package name has changed, so differ betwenn KK and JB
 		if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.KITKAT) {	// NOT KK -> JB
 			// we need to get into the lockscreen, which belongs to system package "android"
@@ -61,115 +56,42 @@ public class XLockSecuritySlide implements IXposedHookLoadPackage {
 		XposedHelpers.findAndHookMethod(keyGuardPackage+"KeyguardHostView", cloader, "showPrimarySecurityScreen", "boolean", new XC_MethodHook() {
 
 			@Override
-			protected void beforeHookedMethod(MethodHookParam param)
-					throws Throwable {
-
-				XposedBridge.log("--showPrimarySecurityScreen(..)");
-				XposedBridge.log("--");
-				XposedHelpers.callMethod(param.thisObject, "showSecurityScreen", SecNone);
-				param.setResult(null);	// prevent original call, it gets called anyway to type in your security measure (somehow..)
-				return;
-			}						
-		});
-		
-		/*
-		XposedHelpers.findAndHookMethod(keyGuardPackage+"KeyguardHostView", cloader, "showSecurityScreen", securityModeEnum, new XC_MethodHook() {
-
-			@Override
-			protected void beforeHookedMethod(MethodHookParam param)
-					throws Throwable {
-
-				XposedBridge.log("-- showSecurityScreen(..)");
-				XposedBridge.log(param.args[0].toString());
-				return;
-			}						
-		});
-		
-		XposedHelpers.findAndHookMethod(keyGuardPackage+"KeyguardHostView", cloader, "showNextSecurityScreenIfPresent", new XC_MethodHook() {
-
-			@Override
-			protected void beforeHookedMethod(MethodHookParam param)
-					throws Throwable {
-
-				XposedBridge.log("-- showNextSecurityScreenIfPresent(..)");
-				return;
-			}						
-		});
-		*/
-		
-		XposedHelpers.findAndHookMethod(keyGuardPackage+"KeyguardHostView", cloader, "showNextSecurityScreenOrFinish", boolean.class, new XC_MethodHook() {
-
-			@Override
-			protected void beforeHookedMethod(MethodHookParam param)
-					throws Throwable {
-
-				XposedBridge.log("-- showNextSecurityScreenOrFinish(..)");
-				XposedBridge.log(param.args[0].toString());
-				param.args[0] = true;
-				return;
-			}
-			@Override
 			protected void afterHookedMethod(MethodHookParam param)
 					throws Throwable {
 
-				XposedBridge.log("-- showNextSecurityScreenOrFinish:after(..)");
-				XposedBridge.log(param.args[0].toString());
-				return;
-			}
+//				XposedBridge.log("--showPrimarySecurityScreen(..)");
+//				XposedBridge.log("--");
+				param.setResult(null);	// prevent original call, it gets called anyway to type in your security measure (somehow..)
+				XposedHelpers.callMethod(param.thisObject, "showSecurityScreen", SecNone);				
+			}						
 		});
 		
-	
+		final Class<?> KeyguardHostView = XposedHelpers.findClass(keyGuardPackage+"KeyguardHostView", cloader);
 
-/*
-	// Possible, but not working fix for second security measure: 
-		// CM misses a mCallback.dismiss(false) in their OnTriggerListener that leads to the user answering the security measure two times
-		// solve this in this way:
-		// An instance of KeyguardSelectorView has to be saved to get access to mOnTriggerListener
-		// do this by intercepting constructor method
-		// it is save to do this because only one instance of KeyguardSelectorView will be present at any one time
-		Constructor<?> KeyguardSelectorViewConstructor = XposedHelpers.findClass("com.android.internal.policy.impl.keyguard.KeyguardSelectorView", cloader).getConstructor(android.content.Context.class, android.util.AttributeSet.class);
-		if (KeyguardSelectorViewConstructor != null)
-			XposedBridge.hookMethod(KeyguardSelectorViewConstructor, new XC_MethodHook() {
-				@Override
-				protected void afterHookedMethod(MethodHookParam param)
-						throws Throwable {
-					XposedBridge.log("-- KeyguardSelectorViewConstructor(..)");
-					//((XLockSecuritySlide)inst).mKeyguardSelectorView = param.thisObject;
-					
-					final Object KeySelectorViewInst = param.thisObject;
-					
-					XposedBridge.log(KeySelectorViewInst.toString());
-					
-					// remove last hook
-					if (((XLockSecuritySlide)inst).lastHook == null) {
-						//((XLockSecuritySlide)inst).lastHook.unhook();
-						//((XLockSecuritySlide)inst).lastHook = null;
-					
+		// after lockscreen has been dismissed (sliding happened), showNextSecurityScreenOrFinish is called with boolean argument "unlocked"
+		XposedHelpers.findAndHookMethod(KeyguardHostView, "showNextSecurityScreenOrFinish", boolean.class, new XC_MethodHook() {
 
-						//XposedHelpers.findAndHookMethod("com.android.internal.widget.multiwaveview.GlowPadView.OnTriggerListener", cloader, "onTrigger", "android.view.View", "int", new XC_MethodHook() {
-						final Class<?> KeyguardSelectorView = XposedHelpers.findClass("com.android.internal.policy.impl.keyguard.KeyguardSelectorView", cloader);
-						Field mOnTriggerListener = XposedHelpers.findField(KeyguardSelectorView, "mOnTriggerListener");
-						((XLockSecuritySlide)inst).lastHook = XposedHelpers.findAndHookMethod(mOnTriggerListener.get(KeySelectorViewInst).getClass(), "onTrigger", "android.view.View", "int", new XC_MethodHook() {
-							@Override
-							protected void beforeHookedMethod(MethodHookParam param)
-									throws Throwable {
-								//((XLockSecuritySlide)inst).mKeyguardSelectorView = param.thisObject;
-								XposedBridge.log("-- onTrigger(..)");
-								XposedBridge.log(param.thisObject.toString());
-								
-								Field mCallback = XposedHelpers.findField(KeyguardSelectorView, "mCallback");
-								XposedHelpers.callMethod(mCallback.get(KeySelectorViewInst), "dismiss", true); //(KeyguardSelectorView, "mCallback");
-								return;
-							}
-						});
+			@Override
+			protected void beforeHookedMethod(MethodHookParam param)
+					throws Throwable {
+
+
+//				XposedBridge.log("-- showNextSecurityScreenOrFinish(..) -> "+param.args[0].toString());
+
+				// Show next security screen only if device hasn't been unlocked yet (-> "false")
+				// if so, request security mode screen (PIN, pattern etc. AND prevent original call)
+				if (param.args[0].equals(false)) {
+					// query security mode
+					Object mSecurityModel = XposedHelpers.getObjectField(param.thisObject, "mSecurityModel");
+					Object secMode = XposedHelpers.callMethod(mSecurityModel, "getSecurityMode");
+					
+					// if security mode is different from None (avoids endless loop of "None" lockscreens)
+					if (!secMode.equals(SecNone)) {
+						XposedHelpers.callMethod(param.thisObject, "showSecurityScreen", secMode);
+						param.setResult(null);
 					}
 				}
-			});
-		
-		// onFinishInflate calls .setOnTriggerListener(), before-interception
-		// onTriggerListener: onTrigger --> before: mCallback.dismiss(false) --> not prevent original
-		//XposedHelpers.findAndHookMethod("com.android.internal.policy.impl.keyguard.KeyguardSelectorView", "", parameterTypesAndCallback)
-	 */
+			}
+		});
 	}
-
 }
