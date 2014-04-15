@@ -25,6 +25,8 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 public class XLockSecuritySlide implements IXposedHookLoadPackage {
 	public Object mKeyguardSelectorView = null;
 	public Unhook lastHook = null;
+	
+	public static final String SONY_LOCKSCREEN = "com.sonyericsson.lockscreen.uxpnxt";
 
 	@Override
 	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
@@ -32,6 +34,10 @@ public class XLockSecuritySlide implements IXposedHookLoadPackage {
 		final ClassLoader cloader = lpparam.classLoader;
 		
 		String keyGuardPackage = "";
+		
+		// catch sony customization
+		if (lpparam.packageName.equals(SONY_LOCKSCREEN))
+			fixSonyLockscreen(lpparam);
 
 //		XposedBridge.log("loadPackage: "+packageName);
 		// on Kitkat package name has changed, so differ betwenn KK and JB
@@ -92,6 +98,23 @@ public class XLockSecuritySlide implements IXposedHookLoadPackage {
 					}
 				}
 			}
+		});
+	}
+
+	private void fixSonyLockscreen(LoadPackageParam lpparam) {
+		XposedHelpers.findAndHookMethod("com.sonymobile.lockscreen.xperia.widget.blindslayout.BlindsRelativeLayout", lpparam.classLoader, "onExitTransitionFinished", new XC_MethodHook() {
+			@Override
+			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+				XposedHelpers.setBooleanField(param.thisObject, "mSkipDraw", false);
+				XposedHelpers.setBooleanField(param.thisObject, "mDrawingBlinds", false);
+			}
+		});
+		XposedHelpers.findAndHookMethod("com.sonymobile.lockscreen.xperia.FadeAllUnlockTransitionStrategy", lpparam.classLoader, "startUnlockTransition", new XC_MethodHook() {
+	        @Override
+	        protected void beforeHookedMethod(MethodHookParam param) throws Throwable
+	        {
+	          param.setResult(null);
+	        }
 		});
 	}
 }
